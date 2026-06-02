@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { useWebSocket } from "@/lib/useEventStream";
-import { notifyNewOrder } from "@/lib/notifications";
+import { notifyNewOrder, notifyReadyForDelivery } from "@/lib/notifications";
 
 const STATUS_OPTIONS = [
   { v: "menunggu_pembayaran", l: "Menunggu Pembayaran" },
@@ -36,6 +36,13 @@ export default function KasirOrders() {
 
   // Live update: refresh list on any order event, with a toast + sound + desktop notif for new orders
   useWebSocket("/api/events/staff", (msg) => {
+    // Detect status transition to "siap_diantar" by comparing with current list
+    if (msg?.event === "order_updated" && msg.order?.status === "siap_diantar") {
+      const prev = orders.find((o) => o.id === msg.order.id);
+      if (!prev || prev.status !== "siap_diantar") {
+        notifyReadyForDelivery(msg.order, () => select(msg.order));
+      }
+    }
     load();
     if (msg?.event === "order_created" && msg.order) {
       toast.success(`🔔 Pesanan baru #${msg.order.order_number} dari Meja ${msg.order.table_number}`, {

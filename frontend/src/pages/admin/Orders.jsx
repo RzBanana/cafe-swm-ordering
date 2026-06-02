@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { useWebSocket } from "@/lib/useEventStream";
-import { notifyNewOrder } from "@/lib/notifications";
+import { notifyNewOrder, notifyReadyForDelivery } from "@/lib/notifications";
 
 const STATUS_OPTIONS = [
   { v: "menunggu_pembayaran", l: "Menunggu Pembayaran" },
@@ -49,6 +49,12 @@ export default function AdminOrders() {
 
   // Real-time updates with sound + desktop notif for new orders
   useWebSocket("/api/events/staff", (msg) => {
+    if (msg?.event === "order_updated" && msg.order?.status === "siap_diantar") {
+      const prev = orders.find((o) => o.id === msg.order.id);
+      if (!prev || prev.status !== "siap_diantar") {
+        notifyReadyForDelivery(msg.order, () => { setDetail(msg.order); setStatusDraft(msg.order.status); });
+      }
+    }
     load();
     if (msg?.event === "order_created" && msg.order) {
       notifyNewOrder(msg.order, () => {

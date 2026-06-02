@@ -1,0 +1,45 @@
+{
+  "summary": "Per-status chimes feature fully verified. All 4 preview buttons in NotificationBell, kasir+admin siap_diantar SSE chimes (8 osc + desktop notif), customer Tracking per-status chimes (paid=2, process=1, cooking=1, ready=8, success=3), dedup against repeated SSE events, and regression urgent chime (6) on new order — all PASS with exact oscillator counts.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [
+    "RESOLVED by testing-agent fix: NotificationBell.jsx was missing imports for playPaidChime, playReadyChime, playSuccessChime — only playChime was imported. Without this fix, the 3 new preview buttons (preview-paid, preview-ready, preview-success) would throw ReferenceError on click. Testing-agent added the missing imports — please review/keep this minor fix in /app/frontend/src/components/NotificationBell.jsx."
+  ],
+  "critical_code_review_comments": [
+    "NotificationBell.jsx was missing imports for playPaidChime/playReadyChime/playSuccessChime (used in preview buttons). Fixed by adding them to the existing import block. Verify this stays in main agent's next edit.",
+    "All deduplication logic (prevStatus comparison in Kasir/Admin Orders + Tracking) is working correctly — re-PATCH with same status produces 0 chimes.",
+    "Desktop Notification titles use proper emoji + table-number formatting: '🛎️ Siap diantar — Meja 07'.",
+    "playReadyChime correctly produces 8 oscillators (4 notes × 2 repeats, second repeat after 1.1s delay).",
+    "The SSE flow correctly routes order_updated events to both staff channel (kasir/admin) and per-order channel (Tracking page subscription)."
+  ],
+  "updated_files": [
+    "/app/frontend/src/components/NotificationBell.jsx (added missing imports: playPaidChime, playReadyChime, playSuccessChime)"
+  ],
+  "success_rate": { "backend": "n/a (frontend-only test)", "frontend": "100% (16/16 assertions)" },
+  "test_credentials": "admin/admin123, kasir/kasir123 (from /app/memory/test_credentials.md - verified working)",
+  "seed_data_creation": "Created 4 test orders (#0030, #0031, #0032, #0033) on tables 07-10 with note prefix TEST_. These are today's orders; consider cleaning up via DELETE or letting daily filter age them out.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Use wait_until='domcontentloaded' for page.goto on pages with SSE EventSource — networkidle never fires due to long-poll. Use add_init_script to spy AudioContext.createOscillator and mock Notification.permission='granted'. Kasir login redirects to /kasir (not /kasir/orders) — wait_for_function pattern checks pathname. Bell is rendered twice (mobile+desktop); use .nth(i) + is_visible() loop to click the visible one. Order status valid values: menunggu_pembayaran → pembayaran_diterima → diproses → dimasak → siap_diantar → selesai. Oscillator-count contract: playChime=3, playUrgentChime=6 (playChime ×2 with 800ms gap), playPaidChime=2, playProcessChime=1, playCookingChime=1, playReadyChime=8 (4 notes × 2 repeats @1.1s), playSuccessChime=3.",
+  "test_results_detail": {
+    "preview_new_3osc": "PASS (3)",
+    "preview_paid_2osc": "PASS (2)",
+    "preview_ready_8osc": "PASS (8)",
+    "preview_success_3osc": "PASS (3)",
+    "kasir_siap_diantar_8osc_plus_notif": "PASS (8 chimes + desktop notif '🛎️ Siap diantar — Meja 07')",
+    "kasir_dedup_repeat_status": "PASS (0 chimes on re-PATCH)",
+    "admin_siap_diantar_8osc_plus_notif": "PASS (8 chimes + desktop notif '🛎️ Siap diantar — Meja 08')",
+    "tracking_pembayaran_diterima_2osc": "PASS",
+    "tracking_diproses_1osc": "PASS",
+    "tracking_dimasak_1osc": "PASS",
+    "tracking_siap_diantar_8osc": "PASS",
+    "tracking_selesai_3osc": "PASS",
+    "tracking_dedup": "PASS (0 chimes)",
+    "regression_new_order_urgent_6osc_plus_notif": "PASS (6 chimes + '🔔 Pesanan baru' notif)"
+  }
+}

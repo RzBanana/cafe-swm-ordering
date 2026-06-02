@@ -6,6 +6,7 @@ import api, { formatRupiah, formatApiError } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { useWebSocket } from "@/lib/useEventStream";
+import { notifyCustomerStatus, playStatusChime } from "@/lib/notifications";
 
 const STATUSES = [
   { key: "menunggu_pembayaran", label: "Menunggu Pembayaran" },
@@ -37,11 +38,12 @@ export default function Tracking() {
     // eslint-disable-next-line
   }, [orderId]);
 
-  // Real-time updates via WebSocket
+  // Real-time updates via SSE — per-status sound + toast + desktop notif
   useWebSocket(orderId ? `/api/events/order/${orderId}` : null, (msg) => {
     if (msg?.order) {
+      const prevStatus = order?.status;
       setOrder(msg.order);
-      if (msg.event === "order_updated") {
+      if (msg.event === "order_updated" && msg.order.status !== prevStatus) {
         const labels = {
           pembayaran_diterima: "Pembayaran diterima!",
           diproses: "Pesanan sedang diproses",
@@ -51,6 +53,12 @@ export default function Tracking() {
         };
         const lbl = labels[msg.order.status];
         if (lbl) toast.success(lbl);
+        // Per-status chime + browser notification when tab inactive
+        if (document.hidden) {
+          notifyCustomerStatus(msg.order);
+        } else {
+          playStatusChime(msg.order.status);
+        }
       }
     }
   });

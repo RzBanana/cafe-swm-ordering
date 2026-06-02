@@ -5,6 +5,9 @@ import {
   notifPermission,
   requestNotifPermission,
   playChime,
+  playPaidChime,
+  playReadyChime,
+  playSuccessChime,
 } from "@/lib/notifications";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -125,6 +128,50 @@ export default function NotificationBell() {
         >
           Tes Suara
         </Button>
+
+        <div className="mt-4 pt-3 border-t border-border/60">
+          <p className="text-[11px] tracking-[0.15em] uppercase text-muted-foreground font-semibold mb-2">
+            Preview per Status
+          </p>
+          <div className="grid grid-cols-2 gap-1.5">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-xs h-8 justify-start"
+              onClick={playChime}
+              data-testid="preview-new"
+            >
+              🔔 Pesanan Baru
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-xs h-8 justify-start"
+              onClick={playPaidChime}
+              data-testid="preview-paid"
+            >
+              ✓ Bayar OK
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-xs h-8 justify-start col-span-2 bg-primary/5 hover:bg-primary/10 text-primary font-medium"
+              onClick={playReadyChime}
+              data-testid="preview-ready"
+            >
+              🛎️ Siap Diantar (alarm)
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-xs h-8 justify-start col-span-2"
+              onClick={playSuccessChime}
+              data-testid="preview-success"
+            >
+              ✓ Pesanan Selesai
+            </Button>
+          </div>
+        </div>
       </PopoverContent>
     </Popover>
   );
