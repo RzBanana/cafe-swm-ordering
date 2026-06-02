@@ -1,12 +1,13 @@
 import { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { QRCodeSVG } from "qrcode.react";
-import { CheckCircle2, Clock, Loader2, Home, Printer } from "lucide-react";
+import { CheckCircle2, Clock, Loader2, Home, Printer, BellRing } from "lucide-react";
 import api, { formatRupiah, formatApiError } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { useWebSocket } from "@/lib/useEventStream";
 import { notifyCustomerStatus, playStatusChime } from "@/lib/notifications";
+import { pushSupported, subscribePush } from "@/lib/push";
 
 const STATUSES = [
   { key: "menunggu_pembayaran", label: "Menunggu Pembayaran" },
@@ -22,7 +23,25 @@ export default function Tracking() {
   const navigate = useNavigate();
   const [order, setOrder] = useState(null);
   const [paying, setPaying] = useState(false);
+  const [pushSubscribed, setPushSubscribed] = useState(false);
+  const [pushBusy, setPushBusy] = useState(false);
   const receiptRef = useRef(null);
+
+  const enableCustomerPush = async () => {
+    if (pushBusy) return;
+    setPushBusy(true);
+    try {
+      const res = await subscribePush({ role: "customer", orderId });
+      if (res.ok) {
+        setPushSubscribed(true);
+        toast.success("Notifikasi aktif — kami akan kabari saat pesanan siap!");
+      } else {
+        toast.error(res.error || "Gagal aktifkan notifikasi");
+      }
+    } finally {
+      setPushBusy(false);
+    }
+  };
 
   const fetchOrder = async () => {
     try {
@@ -102,6 +121,32 @@ export default function Tracking() {
       </div>
 
       <div className="max-w-md mx-auto px-5 -mt-5 space-y-5">
+        {/* Push notification subscribe (customer) */}
+        {pushSupported() && !pushSubscribed && order.status !== "selesai" && order.status !== "dibatalkan" && (
+          <div
+            className="bg-card rounded-2xl border border-border/60 p-4 flex items-center gap-4 shadow-sm fade-up"
+            data-testid="customer-push-prompt"
+          >
+            <div className="size-12 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+              <BellRing className="text-primary" size={22} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-medium text-sm">Aktifkan notifikasi pesanan</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Kami kabari saat pesananmu siap, walau tab/browser ditutup.
+              </p>
+            </div>
+            <Button
+              size="sm"
+              onClick={enableCustomerPush}
+              disabled={pushBusy}
+              data-testid="customer-push-button"
+            >
+              {pushBusy ? "..." : "Aktifkan"}
+            </Button>
+          </div>
+        )}
+
         {/* Estimasi */}
         {order.estimasi_menit && order.status !== "selesai" && (
           <div className="bg-card rounded-2xl border border-border/60 p-4 flex items-center gap-4 shadow-sm">

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Bell, BellOff, Volume2, VolumeX, Check } from "lucide-react";
+import { Bell, BellOff, Volume2, VolumeX, Check, Send, Smartphone } from "lucide-react";
 import {
   notifSettings,
   notifPermission,
@@ -9,6 +9,13 @@ import {
   playReadyChime,
   playSuccessChime,
 } from "@/lib/notifications";
+import {
+  pushSupported,
+  pushEnabled,
+  subscribePush,
+  unsubscribePush,
+  sendTestPush,
+} from "@/lib/push";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -22,6 +29,9 @@ export default function NotificationBell() {
   const [perm, setPerm] = useState("default");
   const [sound, setSound] = useState(notifSettings.sound);
   const [desktop, setDesktop] = useState(notifSettings.desktop);
+  const [push, setPush] = useState(pushEnabled());
+  const [pushBusy, setPushBusy] = useState(false);
+  const isPushSupported = pushSupported();
 
   useEffect(() => {
     setPerm(notifPermission());
@@ -51,7 +61,36 @@ export default function NotificationBell() {
     setDesktop(v);
   };
 
-  const active = (sound || desktop) && (perm === "granted" || sound);
+  const togglePush = async (v) => {
+    if (pushBusy) return;
+    setPushBusy(true);
+    try {
+      if (v) {
+        const res = await subscribePush({ role: "staff" });
+        if (res.ok) {
+          setPush(true);
+          setPerm(notifPermission());
+          toast.success("Push notification aktif untuk device ini");
+        } else {
+          toast.error(res.error || "Gagal aktifkan push");
+        }
+      } else {
+        await unsubscribePush();
+        setPush(false);
+        toast.success("Push notification dimatikan");
+      }
+    } finally {
+      setPushBusy(false);
+    }
+  };
+
+  const testPush = async () => {
+    const res = await sendTestPush();
+    if (res.ok) toast.success("Push terkirim — cek notifikasi OS Anda");
+    else toast.error(res.error || "Gagal kirim test push");
+  };
+
+  const active = (sound || desktop || push) && (perm === "granted" || sound);
   const Icon = active ? Bell : BellOff;
 
   return (
@@ -100,6 +139,21 @@ export default function NotificationBell() {
             disabled={perm === "denied"}
             testId="toggle-desktop"
           />
+          {isPushSupported && (
+            <Row
+              icon={Smartphone}
+              label="Push (Browser Tertutup)"
+              description={
+                push
+                  ? "Aktif — notifikasi sampai walau tab/browser ditutup"
+                  : "Service Worker + VAPID. Tetap masuk walau tab ditutup."
+              }
+              checked={push}
+              onChange={togglePush}
+              disabled={pushBusy || perm === "denied"}
+              testId="toggle-push"
+            />
+          )}
         </div>
 
         {perm === "default" && (
@@ -128,6 +182,18 @@ export default function NotificationBell() {
         >
           Tes Suara
         </Button>
+
+        {isPushSupported && push && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={testPush}
+            className="w-full mt-2"
+            data-testid="test-push-button"
+          >
+            <Send size={14} className="mr-1" /> Tes Push (OS Notification)
+          </Button>
+        )}
 
         <div className="mt-4 pt-3 border-t border-border/60">
           <p className="text-[11px] tracking-[0.15em] uppercase text-muted-foreground font-semibold mb-2">

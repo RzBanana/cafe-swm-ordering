@@ -26,6 +26,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, Field, ConfigDict
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment
+from pywebpush import webpush, WebPushException
 
 
 # ============================================================
@@ -38,6 +39,11 @@ db = client[os.environ["DB_NAME"]]
 JWT_SECRET = os.environ["JWT_SECRET"]
 JWT_ALG = "HS256"
 TAX_RATE = float(os.environ.get("TAX_RATE", "0.10"))
+
+# Web Push (VAPID) config — used for push notifications via Service Worker.
+VAPID_PUBLIC_KEY = os.environ.get("VAPID_PUBLIC_KEY", "")
+VAPID_PRIVATE_KEY = os.environ.get("VAPID_PRIVATE_KEY", "")
+VAPID_SUBJECT = os.environ.get("VAPID_SUBJECT", "mailto:admin@example.com")
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("cafe-swm")
@@ -81,11 +87,55 @@ manager = ConnectionManager()
 
 
 async def notify(event: str, order: dict):
-    """Broadcast an event to staff channel and the order-specific channel."""
+    """Broadcast an event to staff channel and the order-specific channel.
+
+    Also delivers a Web Push notification for the two highest-value events:
+    - order_created → push to all staff
+    - order_updated with status=siap_diantar → push to all staff AND the customer
+    - order_updated with any other status → push to the customer tracking that order
+    """
     msg = {"event": event, "order": order}
     await manager.broadcast("staff", msg)
     if order and order.get("id"):
         await manager.broadcast(f"order:{order['id']}", msg)
+
+    # Web Push side-effects (fire-and-forget; failures already logged inside)
+    if not order:
+        return
+    order_num = order.get("order_number", "")
+    table = order.get("table_number", "")
+    status = order.get("status", "")
+    if event == "order_created":
+        asyncio.create_task(push_to_staff({
+            "title": f"🔔 Pesanan baru #{order_num}",
+            "body": f"Meja {table} · {len(order.get('items', []))} item",
+            "url": "/kasir/orders",
+            "tag": f"order-{order.get('id')}",
+        }))
+    elif event == "order_updated":
+        if status == "siap_diantar":
+            asyncio.create_task(push_to_staff({
+                "title": f"🛎️ Siap diantar — Meja {table}",
+                "body": f"#{order_num} sudah siap. Antar sekarang!",
+                "url": "/kasir/orders",
+                "tag": f"order-{order.get('id')}",
+            }))
+        # Always push to the customer who's tracking this order on a status change
+        labels = {
+            "pembayaran_diterima": ("✓ Pembayaran diterima", "Pesananmu segera diproses."),
+            "diproses": ("⏳ Sedang diproses", "Dapur mulai menyiapkan pesananmu."),
+            "dimasak": ("🍳 Sedang dimasak", "Pesananmu sedang dimasak."),
+            "siap_diantar": ("🛎️ Siap diantar!", "Pesananmu sudah siap."),
+            "selesai": ("✓ Selesai", "Terima kasih telah memesan di SWM Cafe ☕"),
+        }
+        if status in labels:
+            title, body = labels[status]
+            asyncio.create_task(push_to_order(order["id"], {
+                "title": title,
+                "body": f"{body} #{order_num}",
+                "url": f"/track/{order['id']}",
+                "tag": f"order-{order.get('id')}",
+            }))
 
 
 # ============================================================
@@ -229,6 +279,95 @@ class OrderStatusIn(BaseModel):
 
 class CashPayIn(BaseModel):
     received: float
+
+
+class PushSubscriptionIn(BaseModel):
+    """Web Push subscription payload from PushManager.subscribe()."""
+    endpoint: str
+    keys: dict  # { p256dh, auth }
+    role: Literal["staff", "customer"] = "staff"
+    order_id: Optional[str] = None  # for customer-specific subscriptions
+
+
+# ============================================================
+# WEB PUSH (VAPID)
+# Push notifications delivered via the OS even when browser/tab is closed.
+# Requires HTTPS, a Service Worker on the client, and VAPID keys configured.
+# ============================================================
+async def _send_push(sub: dict, payload: dict) -> bool:
+    """Send a single push notification. Returns True on success, False on expired."""
+    if not VAPID_PRIVATE_KEY:
+        return False
+    try:
+        webpush(
+            subscription_info={"endpoint": sub["endpoint"], "keys": sub["keys"]},
+            data=json.dumps(payload),
+            vapid_private_key=VAPID_PRIVATE_KEY,
+            vapid_claims={"sub": VAPID_SUBJECT},
+        )
+        return True
+    except WebPushException as e:
+        # 404 / 410 = subscription expired or unsubscribed
+        if e.response is not None and e.response.status_code in (404, 410):
+            await db.push_subscriptions.delete_one({"endpoint": sub["endpoint"]})
+        else:
+            logger.warning("Web push failed: %s", e)
+        return False
+    except Exception as e:
+        logger.warning("Web push error: %s", e)
+        return False
+
+
+async def push_to_staff(payload: dict):
+    """Broadcast a push notification to every staff subscriber."""
+    subs = await db.push_subscriptions.find({"role": "staff"}, {"_id": 0}).to_list(2000)
+    if subs:
+        await asyncio.gather(*[_send_push(s, payload) for s in subs], return_exceptions=True)
+
+
+async def push_to_order(order_id: str, payload: dict):
+    """Push to all subscribers tracking a specific order id."""
+    subs = await db.push_subscriptions.find(
+        {"role": "customer", "order_id": order_id}, {"_id": 0}
+    ).to_list(2000)
+    if subs:
+        await asyncio.gather(*[_send_push(s, payload) for s in subs], return_exceptions=True)
+
+
+@api.get("/push/vapid-public-key")
+async def get_vapid_public_key():
+    """Public endpoint used by the SW registration flow."""
+    return {"public_key": VAPID_PUBLIC_KEY}
+
+
+@api.post("/push/subscribe")
+async def push_subscribe(body: PushSubscriptionIn):
+    """Idempotently store a subscription (key=endpoint)."""
+    doc = body.model_dump()
+    doc["created_at"] = now_iso()
+    await db.push_subscriptions.update_one(
+        {"endpoint": body.endpoint},
+        {"$set": doc},
+        upsert=True,
+    )
+    return {"ok": True}
+
+
+@api.post("/push/unsubscribe")
+async def push_unsubscribe(body: PushSubscriptionIn):
+    await db.push_subscriptions.delete_one({"endpoint": body.endpoint})
+    return {"ok": True}
+
+
+@api.post("/push/test")
+async def push_test(_: dict = Depends(require_staff)):
+    """Send a test push to all currently-subscribed staff devices."""
+    await push_to_staff({
+        "title": "🔔 Tes Push Notification",
+        "body": "Notifikasi ini berhasil sampai ke device Anda.",
+        "url": "/kasir/orders",
+    })
+    return {"ok": True}
 
 
 # ============================================================
@@ -902,6 +1041,8 @@ async def on_startup():
     await db.products.create_index("category_id")
     await db.tables.create_index("number", unique=True)
     await db.orders.create_index("created_at")
+    await db.push_subscriptions.create_index("endpoint", unique=True)
+    await db.push_subscriptions.create_index("order_id")
 
     # Seed admin
     admin_username = os.environ.get("ADMIN_USERNAME", "admin").lower()

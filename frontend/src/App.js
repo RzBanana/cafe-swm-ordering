@@ -1,8 +1,10 @@
 import "@/App.css";
+import { useEffect } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { CartProvider } from "@/contexts/CartContext";
+import { registerServiceWorker } from "@/lib/push";
 
 // Customer
 import Welcome from "@/pages/customer/Welcome";
@@ -41,6 +43,10 @@ function ProtectedRoute({ role, children }) {
 }
 
 function App() {
+  useEffect(() => {
+    // Register service worker once at app startup so push events can be received
+    registerServiceWorker();
+  }, []);
   return (
     <AuthProvider>
       <CartProvider>

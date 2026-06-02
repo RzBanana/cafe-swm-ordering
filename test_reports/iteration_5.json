@@ -1,0 +1,39 @@
+{
+  "summary": "Web Push (VAPID + Service Worker) feature tested end-to-end. Backend: 41 tests pass (1 skipped due to external httpbin.org rate-limit, not a code bug). Frontend: staff toggle-push ON/OFF, test-push, and customer tracking subscribe flows fully verified via Playwright with mocked PushManager + XHR interception. Service worker is served at /service-worker.js with Content-Type application/javascript and contains push + notificationclick handlers. Full regression (auth, products, orders, SSE, ESC/POS, reports, Excel) still green.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_push.py",
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "_send_push cleanup branch only triggers on HTTP 404/410 from WebPushException. Other transient failures (e.g., 5xx, network) correctly leave the subscription intact — good. Consider also cleaning on 401/403 (gone keys) if observed in production logs.",
+    "Test fake keys (e.g., p256dh=kFAKE) cause pywebpush base64 decoding warnings (`Invalid base64-encoded string`). Backend handles them gracefully via try/except; no crash. This is expected during testing.",
+    "server.py is 1157 lines — approaching the 700-line guideline. Consider modularising push helpers, routes, and SSE into separate files for maintainability."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_push.py (new)"
+  ],
+  "success_rate": {"backend": "100% (41/41 push & regression, 1 env-dep skipped)", "frontend": "100% (staff + customer flows)"},
+  "test_credentials": "admin/admin123, kasir/kasir123 — read from /app/memory/test_credentials.md",
+  "seed_data_creation": "Test push_subscriptions documents created and cleaned up per-test. One TEST_ order created via /api/orders for customer-tracking flow (left in DB; non-destructive).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Push delivery itself cannot be verified in headless env — only the wiring (endpoint accepts subs, push_to_staff/push_to_order invoked on order events). Auto-cleanup test depends on httpbin.org/status/410 returning 410 (not 503 rate-limit) — skipped automatically when rate-limited. Frontend tests stub navigator.serviceWorker.register/getRegistration/ready + Notification.requestPermission to bypass real browser permissions. Use XHR interceptor (not fetch hook) because the app uses axios.",
+  "verified_features": [
+    "GET /api/push/vapid-public-key returns 88-char base64url public key starting with 'B', no auth required",
+    "POST /api/push/subscribe stores doc in db.push_subscriptions for both staff and customer roles",
+    "Upsert on duplicate endpoint — only 1 record kept",
+    "POST /api/push/unsubscribe deletes the doc",
+    "POST /api/push/test requires staff auth (401 without token, 200 for admin & kasir)",
+    "Fake subscription with unreachable endpoint does not crash /api/orders create or /api/orders/{id}/status updates",
+    "Order status walk (pembayaran_diterima → diproses → dimasak → siap_diantar → selesai) succeeds with push_to_staff/push_to_order fire-and-forget",
+    "Service worker at /service-worker.js: HTTP 200, Content-Type application/javascript, contains 'push' event + 'notificationclick' handlers",
+    "Staff NotificationBell toggle-push: requests Notification permission, fetches VAPID key, calls pushManager.subscribe, POSTs {endpoint, keys, role:'staff', order_id:null}, sets localStorage swm_push_enabled=on, shows toast & test-push-button",
+    "test-push-button POSTs /api/push/test",
+    "toggle-push OFF posts /api/push/unsubscribe and clears localStorage",
+    "Customer /track/:orderId shows customer-push-prompt + customer-push-button for non-terminal orders; clicking subscribes with role='customer' and the orderId"
+  ]
+}
