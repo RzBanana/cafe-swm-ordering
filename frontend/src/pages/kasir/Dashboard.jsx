@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { TrendingUp, Clock, CheckCircle2, ScrollText } from "lucide-react";
 import api, { formatRupiah } from "@/lib/api";
 import { useWebSocket } from "@/lib/useEventStream";
+import { notifyNewOrder } from "@/lib/notifications";
 
 export default function KasirDashboard() {
   const [stats, setStats] = useState(null);
@@ -14,8 +15,13 @@ export default function KasirDashboard() {
   };
   useEffect(() => { load(); }, []);
 
-  // Auto-refresh on any order event
-  useWebSocket("/api/events/staff", () => load());
+  // Auto-refresh on any order event + alert on new orders
+  useWebSocket("/api/events/staff", (msg) => {
+    load();
+    if (msg?.event === "order_created" && msg.order) {
+      notifyNewOrder(msg.order, () => (window.location.href = "/kasir/orders"));
+    }
+  });
 
   if (!stats) return <p className="text-muted-foreground">Memuat...</p>;
 

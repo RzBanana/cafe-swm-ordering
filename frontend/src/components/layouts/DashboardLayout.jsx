@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
+import NotificationBell from "@/components/NotificationBell";
 
 const ADMIN_NAV = [
   { to: "/admin", label: "Dashboard", Icon: LayoutDashboard, end: true },
@@ -110,9 +111,12 @@ export default function DashboardLayout({ role = "admin" }) {
             <Coffee size={18} className="text-primary" />
             <span className="font-heading text-base">SWM Cafe</span>
           </div>
-          <Button variant="ghost" size="sm" onClick={handleLogout} data-testid="mobile-logout">
-            <LogOut size={14} />
-          </Button>
+          <div className="flex items-center gap-1">
+            <NotificationBell />
+            <Button variant="ghost" size="sm" onClick={handleLogout} data-testid="mobile-logout">
+              <LogOut size={14} />
+            </Button>
+          </div>
         </div>
         <div className="flex overflow-x-auto border-t border-border/60 px-2 py-1 gap-1">
           {nav.map((n) => (
@@ -132,7 +136,11 @@ export default function DashboardLayout({ role = "admin" }) {
         </div>
       </div>
 
-      <main className="flex-1 lg:ml-0 pt-24 lg:pt-0 p-4 lg:p-8 min-w-0">
+      <main className="flex-1 lg:ml-0 pt-24 lg:pt-0 p-4 lg:p-8 min-w-0 relative">
+        {/* Desktop floating notification bell */}
+        <div className="hidden lg:flex absolute top-6 right-8 z-20">
+          <NotificationBell />
+        </div>
         <Outlet />
       </main>
     </div>

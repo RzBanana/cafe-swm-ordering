@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Printer, Wallet, Check, Bell } from "lucide-react";
 import api, { formatRupiah, formatApiError } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -8,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { useWebSocket } from "@/lib/useEventStream";
+import { notifyNewOrder } from "@/lib/notifications";
 
 const STATUS_OPTIONS = [
   { v: "menunggu_pembayaran", l: "Menunggu Pembayaran" },
@@ -21,6 +23,7 @@ const STATUS_OPTIONS = [
 const ESTIMASI = [10, 15, 20, 30];
 
 export default function KasirOrders() {
+  const navigate = useNavigate();
   const [orders, setOrders] = useState([]);
   const [selected, setSelected] = useState(null);
   const [statusDraft, setStatusDraft] = useState("");
@@ -31,19 +34,19 @@ export default function KasirOrders() {
   const load = () => api.get("/orders", { params: { today: true } }).then((r) => setOrders(r.data));
   useEffect(() => { load(); }, []);
 
-  // Live update: refresh list on any order event, with a toast for new orders
+  // Live update: refresh list on any order event, with a toast + sound + desktop notif for new orders
   useWebSocket("/api/events/staff", (msg) => {
     load();
     if (msg?.event === "order_created" && msg.order) {
       toast.success(`🔔 Pesanan baru #${msg.order.order_number} dari Meja ${msg.order.table_number}`, {
         duration: 6000,
       });
-      try {
-        new Audio("data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=").play().catch(() => {});
-      } catch (_) { /* ignore */ }
+      notifyNewOrder(msg.order, () => {
+        navigate("/kasir/orders");
+        select(msg.order);
+      });
     }
     if (msg?.event === "order_updated" && msg.order) {
-      // If the selected order was updated, refresh detail
       setSelected((s) => (s && s.id === msg.order.id ? msg.order : s));
     }
   });

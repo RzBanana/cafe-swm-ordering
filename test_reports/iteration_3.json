@@ -1,0 +1,41 @@
+{
+  "summary": "Frontend-only validation of NotificationBell + browser/audio notifications on kasir & admin dashboards. All targeted behaviors verified end-to-end: bell renders (mobile+desktop instances), popover controls present, WebAudio chime fires without errors, localStorage persistence works, SSE 'order_created' triggers notifyNewOrder() on /kasir/orders, /kasir dashboard, and /admin/orders with correctly-formatted desktop notification title and order-list refresh. Backend regression skipped per request (no backend changes in this iteration).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/backend/tests/test_sse_escpos.py"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "NotificationBell.jsx is rendered twice in DOM (mobile top-bar + desktop floating) -> both share localStorage keys; this is intentional but tests must use .last (visible desktop) or :visible filter when asserting visibility. Consider gating second instance with React fragment + breakpoint at component level if duplicate event listeners ever cause double-fire (currently fine because notifyNewOrder is invoked from page components, not the Bell itself).",
+    "Order creation schema uses 'qty' and 'note' (not 'quantity'/'notes'). All page-side fetch helpers already comply; just a note for future tests.",
+    "Desktop notif title contains emoji '🔔 Pesanan baru #ORDERNUM' — confirmed via mock Notification spy."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "skipped", "frontend": "100%"},
+  "test_credentials": "kasir/kasir123, admin/admin123 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "Created 3 TEST_ orders (#0027, #0028, #0029) via /api/orders POST to trigger SSE; non-destructive, only adds rows.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Bell has 2 DOM instances per page (mobile + desktop layouts). Use page.locator('[data-testid=\"notif-bell\"]').last for desktop. Mock Notification + AudioContext spy via page.add_init_script BEFORE goto. Order POST body: {table_number, items:[{product_id,name,price,qty,note}], payment_method:'tunai'|'qris'|'transfer'}. notifyNewOrder() title format: '🔔 Pesanan baru #ORDERNUM'. playUrgentChime fires 6 createOscillator() calls; playChime fires 3.",
+  "detailed_results": {
+    "bell_visible_kasir": "2 DOM (mobile+desktop), desktop visible=true",
+    "bell_visible_admin": "2 DOM, desktop visible=true (also on /admin/products)",
+    "popover_controls": "toggle-sound=1, toggle-desktop=1, test-sound-button=1, enable-desktop-button=0 (correctly hidden when permission='granted')",
+    "test_sound_chime": "chimes incremented from 0->3 (playChime → 3 oscillators), no errors",
+    "localStorage_sound": "off after toggle off, 'on' after toggle on (key: swm_notif_sound)",
+    "localStorage_desktop": "off after toggle (key: swm_notif_desktop)",
+    "sse_kasir_orders": "POST /api/orders 200, chimes=6 (playUrgentChime), desktop notif title='🔔 Pesanan baru #20260602-0027', errors=[]",
+    "sse_kasir_dashboard": "POST /api/orders 200, chimes=6, desktop notif='🔔 Pesanan baru #20260602-0028', errors=[]",
+    "sse_admin_orders": "POST /api/orders 200, chimes=6, desktop notif='🔔 Pesanan baru #20260602-0029', errors=[], order list refreshed (visually confirmed new rows at top of admin/orders table)",
+    "denied_permission_logic": "Verified via code review in NotificationBell.jsx line 97 (disabled={perm==='denied'}) and conditional enable-button at line 102 (perm==='default' only). Sound toggle has no disabled prop → always works (chimes still fired post-toggle).",
+    "regression": "/menu and /admin/products load OK with bell rendered",
+    "console_errors": "None observed during full flow; only stray 'WebSocket dev HMR' chatter (preview env), unrelated to notifications."
+  },
+  "rca_of_the_issue": "N/A — no defects discovered. Feature implementation is correct and integrates cleanly with existing SSE pipeline."
+}
