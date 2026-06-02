@@ -36,6 +36,13 @@ Membangun sistem informasi pemesanan Cafe SWM berbasis web dengan 3 pengguna uta
 ✓ Thermal print page `/print/:orderId` — 80mm monospace layout, auto window.print()
 ✓ ESC/POS endpoint `GET /api/orders/{id}/escpos` — raw bytes for direct USB/Bluetooth thermal printers (RawBT, lp, etc.)
 
+### Notifications (added 2026-02)
+✓ WebAudio chime (3-note bell ding, 880→1100→880 Hz) — `playChime()` / `playUrgentChime()` (double-ring for new orders)
+✓ Browser Notification API integration — desktop popup with order summary, click=focus tab + jump to order detail
+✓ `NotificationBell` component in dashboard header (desktop+mobile) — toggles for sound/desktop, "Tes Suara" button, permission request flow
+✓ Persistent settings via localStorage (`swm_notif_sound`, `swm_notif_desktop`)
+✓ Wired into Kasir Orders, Kasir Dashboard, Admin Orders pages on SSE `order_created` event
+
 ## Tested
 - Backend pytest: 30/30 passing (auth, CRUD, orders, payments, reports, exports)
 - Frontend e2e: customer welcome→menu→cart→checkout→tracking; admin login→dashboard→products→tables→reports; kasir login→dashboard→orders
