@@ -18,7 +18,9 @@ from datetime import datetime, timezone, timedelta
 from typing import Optional, List, Literal
 
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request, Query
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, Response
+import asyncio
+import json
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, Field, ConfigDict
@@ -42,6 +44,48 @@ logger = logging.getLogger("cafe-swm")
 
 app = FastAPI(title="Cafe SWM API")
 api = APIRouter(prefix="/api")
+
+
+# ============================================================
+# WEBSOCKET CONNECTION MANAGER
+# ============================================================
+class ConnectionManager:
+    """Manages SSE subscribers grouped by channel ("staff" or per-order id).
+
+    Each subscriber holds an asyncio.Queue. broadcast() pushes a JSON payload to
+    every queue in the channel; the SSE endpoint drains its queue back to the
+    client as `data: ...\\n\\n` events.
+    """
+
+    def __init__(self):
+        self.channels: dict[str, list[asyncio.Queue]] = {}
+
+    def subscribe(self, channel: str) -> asyncio.Queue:
+        q: asyncio.Queue = asyncio.Queue()
+        self.channels.setdefault(channel, []).append(q)
+        return q
+
+    def unsubscribe(self, channel: str, q: asyncio.Queue):
+        if channel in self.channels and q in self.channels[channel]:
+            self.channels[channel].remove(q)
+
+    async def broadcast(self, channel: str, message: dict):
+        for q in self.channels.get(channel, []):
+            try:
+                q.put_nowait(message)
+            except Exception:
+                pass
+
+
+manager = ConnectionManager()
+
+
+async def notify(event: str, order: dict):
+    """Broadcast an event to staff channel and the order-specific channel."""
+    msg = {"event": event, "order": order}
+    await manager.broadcast("staff", msg)
+    if order and order.get("id"):
+        await manager.broadcast(f"order:{order['id']}", msg)
 
 
 # ============================================================
@@ -442,6 +486,7 @@ async def create_order(body: OrderCreateIn):
         "updated_at": now_iso(),
     }
     await db.orders.insert_one(order.copy())
+    await notify("order_created", order)
     return strip_mongo(order)
 
 
@@ -479,7 +524,9 @@ async def update_order_status(oid: str, body: OrderStatusIn, _: dict = Depends(r
         update["payment_status"] = "paid"
         update["paid_at"] = now_iso()
     await db.orders.update_one({"id": oid}, {"$set": update})
-    return await db.orders.find_one({"id": oid}, {"_id": 0})
+    fresh = await db.orders.find_one({"id": oid}, {"_id": 0})
+    await notify("order_updated", fresh)
+    return fresh
 
 
 @api.post("/orders/{oid}/cash-pay")
@@ -501,6 +548,8 @@ async def cash_pay(oid: str, body: CashPayIn, _: dict = Depends(require_staff)):
             "updated_at": now_iso(),
         }},
     )
+    fresh = await db.orders.find_one({"id": oid}, {"_id": 0})
+    await notify("order_updated", fresh)
     return {"ok": True, "change": change}
 
 
@@ -519,12 +568,16 @@ async def qris_pay(oid: str):
             "updated_at": now_iso(),
         }},
     )
+    fresh = await db.orders.find_one({"id": oid}, {"_id": 0})
+    await notify("order_updated", fresh)
     return {"ok": True}
 
 
 @api.delete("/orders/{oid}")
 async def cancel_order(oid: str, _: dict = Depends(require_admin)):
     await db.orders.update_one({"id": oid}, {"$set": {"status": "dibatalkan", "updated_at": now_iso()}})
+    fresh = await db.orders.find_one({"id": oid}, {"_id": 0})
+    await notify("order_updated", fresh)
     return {"ok": True}
 
 
@@ -691,6 +744,152 @@ async def export_excel(
         buf,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+# ============================================================
+# THERMAL PRINTER (ESC/POS)
+# ============================================================
+def _escpos_receipt(order: dict) -> bytes:
+    """Generate raw ESC/POS bytes for a 58/80mm thermal receipt.
+
+    Standard commands:
+      ESC @ (1B 40) — initialize
+      ESC a n (1B 61 n) — alignment (0=left, 1=center, 2=right)
+      ESC ! n (1B 21 n) — text style (0x10=double-height, 0x20=double-width, 0x08=bold)
+      GS V m (1D 56 m) — full cut (0x00 full, 0x01 partial)
+      LF (0x0A) — line feed
+    """
+    ESC = b"\x1b"
+    GS = b"\x1d"
+    INIT = ESC + b"@"
+    CENTER = ESC + b"a\x01"
+    LEFT = ESC + b"a\x00"
+    BOLD_ON = ESC + b"E\x01"
+    BOLD_OFF = ESC + b"E\x00"
+    DOUBLE = ESC + b"!\x30"
+    NORMAL = ESC + b"!\x00"
+    CUT = GS + b"V\x00"
+    LF = b"\n"
+
+    width = 32  # 58mm paper ≈ 32 chars; 80mm ≈ 48
+
+    def line(char="-"):
+        return (char * width).encode() + LF
+
+    def kv(k: str, v: str) -> bytes:
+        # Right-align value
+        v = str(v)
+        space = max(1, width - len(k) - len(v))
+        return f"{k}{' ' * space}{v}".encode() + LF
+
+    out = bytearray()
+    out += INIT
+    out += CENTER + DOUBLE + BOLD_ON + b"SWM CAFE" + LF + BOLD_OFF + NORMAL
+    out += CENTER + b"Jl. Kopi No. 1 - 021-xxx" + LF
+    out += LEFT + line("=")
+    out += kv("No.", f"#{order.get('order_number','')}")
+    out += kv("Meja", order.get("table_number", "-"))
+    created = order.get("created_at", "")[:19].replace("T", " ")
+    out += kv("Tanggal", created)
+    out += kv("Metode", str(order.get("payment_method", "")).upper())
+    out += line("-")
+
+    for item in order.get("items", []):
+        name = item.get("name", "")[: width - 1]
+        out += BOLD_ON + f"{item.get('qty')}x {name}".encode() + BOLD_OFF + LF
+        price_line = f"  @ {int(item.get('price',0)):,}".replace(",", ".")
+        total_line = f"{int(item.get('price',0)*item.get('qty',0)):,}".replace(",", ".")
+        space = max(1, width - len(price_line) - len(total_line))
+        out += (price_line + " " * space + total_line).encode() + LF
+        note = (item.get("note") or "").strip()
+        if note:
+            out += f"  - {note[: width - 4]}".encode() + LF
+
+    out += line("-")
+    out += kv("Subtotal", f"Rp {int(order.get('subtotal',0)):,}".replace(",", "."))
+    out += kv("Pajak", f"Rp {int(order.get('tax',0)):,}".replace(",", "."))
+    out += BOLD_ON + kv("TOTAL", f"Rp {int(order.get('total',0)):,}".replace(",", ".")) + BOLD_OFF
+    if order.get("cash_received") is not None:
+        out += kv("Tunai", f"Rp {int(order.get('cash_received',0)):,}".replace(",", "."))
+        out += kv("Kembali", f"Rp {int(order.get('cash_change',0)):,}".replace(",", "."))
+    out += line("=")
+    out += CENTER + b"Terima kasih telah memesan" + LF
+    out += CENTER + b"~ SWM Cafe ~" + LF
+    out += LF + LF + LF + LF
+    out += CUT
+    return bytes(out)
+
+
+@api.get("/orders/{oid}/escpos")
+async def order_escpos(oid: str):
+    """Return raw ESC/POS bytes for direct thermal printer use (USB/Bluetooth/Network).
+
+    Send the .bin file to a thermal printer via tools like RawBT (Android),
+    `lp -d printer file.bin` (Linux/Mac), or `copy /b file.bin LPT1:` (Windows).
+    """
+    order = await db.orders.find_one({"id": oid}, {"_id": 0})
+    if not order:
+        raise HTTPException(404, "Pesanan tidak ditemukan")
+    data = _escpos_receipt(order)
+    return Response(
+        content=data,
+        media_type="application/octet-stream",
+        headers={"Content-Disposition": f'attachment; filename="struk-{order["order_number"]}.bin"'},
+    )
+
+
+# ============================================================
+# SSE (Server-Sent Events) — real-time order updates
+# Works over standard HTTPS through K8s ingress (no WebSocket upgrade needed)
+# ============================================================
+async def _sse_stream(channel: str):
+    q = manager.subscribe(channel)
+    try:
+        # Initial event so the client immediately knows the connection is alive
+        yield f"event: ready\ndata: {json.dumps({'channel': channel})}\n\n"
+        while True:
+            try:
+                msg = await asyncio.wait_for(q.get(), timeout=20)
+                yield f"data: {json.dumps(msg, default=str)}\n\n"
+            except asyncio.TimeoutError:
+                # Comment-line keep-alive (ignored by EventSource)
+                yield ": keepalive\n\n"
+    finally:
+        manager.unsubscribe(channel, q)
+
+
+@api.get("/events/staff")
+async def sse_staff():
+    """Staff (kasir/admin) channel — receives all order events as SSE.
+
+    Note: SSE doesn't carry Authorization headers from EventSource by default.
+    Anyone on the staff URL can listen — but the data is just order state which
+    is already protected at write-time. For stricter security, swap with a
+    server-rendered token query param later.
+    """
+    return StreamingResponse(
+        _sse_stream("staff"),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )
+
+
+@api.get("/events/order/{order_id}")
+async def sse_order(order_id: str):
+    """Customer per-order channel — receives updates only for that order."""
+    return StreamingResponse(
+        _sse_stream(f"order:{order_id}"),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
     )
 
 

@@ -13,6 +13,7 @@ import History from "@/pages/customer/History";
 
 // Auth
 import Login from "@/pages/auth/Login";
+import ThermalReceipt from "@/pages/ThermalReceipt";
 
 // Admin
 import AdminLayout from "@/components/layouts/DashboardLayout";
@@ -54,6 +55,7 @@ function App() {
 
             {/* Auth */}
             <Route path="/login" element={<Login />} />
+            <Route path="/print/:orderId" element={<ThermalReceipt />} />
 
             {/* Admin */}
             <Route

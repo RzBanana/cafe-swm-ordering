@@ -5,6 +5,7 @@ import { CheckCircle2, Clock, Loader2, Home, Printer } from "lucide-react";
 import api, { formatRupiah, formatApiError } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { useWebSocket } from "@/lib/useEventStream";
 
 const STATUSES = [
   { key: "menunggu_pembayaran", label: "Menunggu Pembayaran" },
@@ -33,10 +34,26 @@ export default function Tracking() {
 
   useEffect(() => {
     fetchOrder();
-    const id = setInterval(fetchOrder, 5000);
-    return () => clearInterval(id);
     // eslint-disable-next-line
   }, [orderId]);
+
+  // Real-time updates via WebSocket
+  useWebSocket(orderId ? `/api/events/order/${orderId}` : null, (msg) => {
+    if (msg?.order) {
+      setOrder(msg.order);
+      if (msg.event === "order_updated") {
+        const labels = {
+          pembayaran_diterima: "Pembayaran diterima!",
+          diproses: "Pesanan sedang diproses",
+          dimasak: "Pesanan sedang dimasak",
+          siap_diantar: "Pesanan siap diantar 🎉",
+          selesai: "Pesanan selesai. Terima kasih!",
+        };
+        const lbl = labels[msg.order.status];
+        if (lbl) toast.success(lbl);
+      }
+    }
+  });
 
   const payQris = async () => {
     setPaying(true);
@@ -215,7 +232,7 @@ export default function Tracking() {
         </div>
 
         <div className="grid grid-cols-2 gap-3">
-          <Button variant="outline" onClick={() => window.print()} data-testid="print-receipt">
+          <Button variant="outline" onClick={() => window.open(`/print/${orderId}`, "_blank")} data-testid="print-receipt">
             <Printer size={14} className="mr-1" /> Cetak
           </Button>
           <Button onClick={() => navigate("/")} data-testid="back-home">

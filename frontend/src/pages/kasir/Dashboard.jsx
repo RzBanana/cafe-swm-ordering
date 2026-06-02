@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { TrendingUp, Clock, CheckCircle2, ScrollText } from "lucide-react";
 import api, { formatRupiah } from "@/lib/api";
+import { useWebSocket } from "@/lib/useEventStream";
 
 export default function KasirDashboard() {
   const [stats, setStats] = useState(null);
@@ -11,7 +12,10 @@ export default function KasirDashboard() {
     api.get("/reports/summary").then((r) => setStats(r.data));
     api.get("/orders", { params: { today: true } }).then((r) => setOrders(r.data.slice(0, 5)));
   };
-  useEffect(() => { load(); const id = setInterval(load, 8000); return () => clearInterval(id); }, []);
+  useEffect(() => { load(); }, []);
+
+  // Auto-refresh on any order event
+  useWebSocket("/api/events/staff", () => load());
 
   if (!stats) return <p className="text-muted-foreground">Memuat...</p>;
 

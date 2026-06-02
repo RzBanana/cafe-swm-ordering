@@ -1,0 +1,44 @@
+{
+  "summary": "Iteration 2: Tested the 2 new features added on top of the previously-passing Cafe SWM MVP — (1) SSE-based real-time order notifications (replacing K8s-incompatible WebSockets) and (2) Thermal printer integration (80mm /print page + ESC/POS .bin endpoint). All 37 backend pytest cases pass (30 regression + 7 new SSE/ESCPOS). All frontend SSE flows verified end-to-end with EventSource live in the browser: customer tracking auto-updates on kasir status PATCH, kasir orders list auto-prepends new orders with a toast 'Pesanan baru #... dari Meja ...', admin orders list also auto-refreshes. Thermal receipt page renders 80mm monospace layout, auto-triggers window.print() ~600ms after order load, and exposes both Cetak Sekarang and ESC/POS .bin buttons. ESC/POS endpoint returns octet-stream starting with ESC@ (0x1B 0x40) and ending with GS V 0 (0x1D 0x56 0x00), correctly named struk-{order_number}.bin.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/events/staff & /api/events/order/{id}", "issue": "No auth on SSE endpoints (documented in code comment). Anyone with the URL can subscribe to staff order feed. Acceptable for now since write endpoints remain protected, but flag for production hardening (query-param token)."},
+      {"endpoint": "GET /api/orders/{id}/escpos", "issue": "No auth required. Same threat as above — anyone with an order id (UUID) can download the .bin. Order-id-as-secret is acceptable for customer flow parity but worth noting."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "/print/:orderId", "issues": ["Auto window.print() fires every time the order state updates because the print effect depends on `order`. If the SSE pushes an update after load the dialog could re-open (in current test only fired once because no update arrived). Consider guarding with a useRef so it auto-prints only on first load."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/backend/tests/test_sse_escpos.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "(Optional) Guard auto-print useEffect in ThermalReceipt.jsx with a useRef so it only fires once per page mount (avoid re-prompt if SSE arrives later — though ThermalReceipt doesn't currently subscribe to SSE).",
+    "(Optional, security) Add token/signed-id auth for /api/events/staff and /api/orders/{id}/escpos before production."
+  ],
+  "critical_code_review_comments": [
+    "ConnectionManager uses asyncio.Queue with put_nowait + unbounded queue — fine for low traffic but in long-running clients with bursty broadcasts the queue can grow. Consider maxsize and drop-oldest semantics.",
+    "_sse_stream sends 'event: ready' as first message but subsequent broadcasts use only 'data: ...' (no event:name). useEventStream listens on es.onmessage which only fires for unnamed default events — so the explicit 'event: ready' is NEVER delivered to the JS client (only test code that parses event: lines saw it). This is fine because the client doesn't depend on it, but the 'ready' signal is effectively backend-test-only.",
+    "notify() is called inside the request handler before returning the response — broadcast is fast (put_nowait) so latency impact is negligible. Good design.",
+    "server.py grew to 1015 lines — still single-file. Recommend splitting into routers when team grows.",
+    "ThermalReceipt.downloadEscpos() uses fetch + blob URL but does not URL.revokeObjectURL — minor memory leak on repeated downloads.",
+    "EventSource URL is built from REACT_APP_BACKEND_URL via the hook — no CORS/credentials needed because preview backend allows '*' origin. Confirmed working through k8s ingress."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_sse_escpos.py (new — 7 tests covering SSE staff/order ready event, order_created broadcast, order_updated on PATCH+qris-pay, ESC/POS bytes & 404)"
+  ],
+  "success_rate": {"backend": "100% (37/37 pytest)", "frontend": "100% on tested flows (tracking SSE auto-update, thermal receipt render+autoprint+escpos download, kasir orders toast, admin orders auto-refresh)"},
+  "test_credentials": "admin/admin123, kasir/kasir123 (verified working)",
+  "seed_data_creation": "No additional seed. Used existing seeded products + tables. Test orders created with note 'ft'/'ssetest'/'admintest' for traceability.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Backend tests: /app/backend/tests/backend_test.py (30 regression) + /app/backend/tests/test_sse_escpos.py (7 SSE/ESCPOS) — run with `pytest backend/tests/ -v` (≈2 min, SSE tests use threading + iter_lines). Frontend: when navigating to pages that open EventSource, use page.goto(..., wait_until='domcontentloaded') instead of 'networkidle' because SSE keeps the connection open and triggers a 30s timeout. To prevent ThermalReceipt's auto window.print() from hanging Playwright, prepend page.add_init_script('window.print=()=>{window.__printed=(window.__printed||0)+1;}'). 'Cetak Struk Thermal' button on /kasir/orders only appears after clicking an order row (right-side detail panel).",
+  "rca of the issue": "No bugs found. Both new features (SSE + ESC/POS thermal) implemented correctly and integrate seamlessly with the existing app. All previously passing regression tests still pass."
+}

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Printer, Wallet, Check } from "lucide-react";
+import { Printer, Wallet, Check, Bell } from "lucide-react";
 import api, { formatRupiah, formatApiError } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import { useWebSocket } from "@/lib/useEventStream";
 
 const STATUS_OPTIONS = [
   { v: "menunggu_pembayaran", l: "Menunggu Pembayaran" },
@@ -28,7 +29,24 @@ export default function KasirOrders() {
   const [cashReceived, setCashReceived] = useState("");
 
   const load = () => api.get("/orders", { params: { today: true } }).then((r) => setOrders(r.data));
-  useEffect(() => { load(); const id = setInterval(load, 5000); return () => clearInterval(id); }, []);
+  useEffect(() => { load(); }, []);
+
+  // Live update: refresh list on any order event, with a toast for new orders
+  useWebSocket("/api/events/staff", (msg) => {
+    load();
+    if (msg?.event === "order_created" && msg.order) {
+      toast.success(`🔔 Pesanan baru #${msg.order.order_number} dari Meja ${msg.order.table_number}`, {
+        duration: 6000,
+      });
+      try {
+        new Audio("data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=").play().catch(() => {});
+      } catch (_) { /* ignore */ }
+    }
+    if (msg?.event === "order_updated" && msg.order) {
+      // If the selected order was updated, refresh detail
+      setSelected((s) => (s && s.id === msg.order.id ? msg.order : s));
+    }
+  });
 
   const select = (o) => { setSelected(o); setStatusDraft(o.status); setEstimasi(o.estimasi_menit || ""); };
 
@@ -151,8 +169,8 @@ export default function KasirOrders() {
               <Button onClick={updateStatus} className="w-full" data-testid="kasir-update-status">
                 <Check size={14} className="mr-1" /> Update Status
               </Button>
-              <Button variant="outline" onClick={() => window.open(`/track/${selected.id}`, "_blank")} className="w-full" data-testid="kasir-print">
-                <Printer size={14} className="mr-1" /> Lihat / Cetak Struk
+              <Button variant="outline" onClick={() => window.open(`/print/${selected.id}`, "_blank")} className="w-full" data-testid="kasir-print">
+                <Printer size={14} className="mr-1" /> Cetak Struk Thermal
               </Button>
             </div>
           </>

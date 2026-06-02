@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import { useWebSocket } from "@/lib/useEventStream";
 
 const STATUS_OPTIONS = [
   { v: "menunggu_pembayaran", l: "Menunggu Pembayaran" },
@@ -42,10 +43,11 @@ export default function AdminOrders() {
   };
   useEffect(() => {
     load();
-    const id = setInterval(load, 8000);
-    return () => clearInterval(id);
     // eslint-disable-next-line
   }, [filter]);
+
+  // Real-time updates
+  useWebSocket("/api/events/staff", () => load());
 
   const updateStatus = async (oid) => {
     try {
