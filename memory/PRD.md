@@ -37,21 +37,17 @@ Membangun sistem informasi pemesanan Cafe SWM berbasis web dengan 3 pengguna uta
 ✓ ESC/POS endpoint `GET /api/orders/{id}/escpos` — raw bytes for direct USB/Bluetooth thermal printers (RawBT, lp, etc.)
 
 ### Notifications (added 2026-02)
-✓ WebAudio chime (3-note bell ding, 880→1100→880 Hz) — `playChime()` / `playUrgentChime()` (double-ring for new orders)
-✓ Browser Notification API integration — desktop popup with order summary, click=focus tab + jump to order detail
-✓ `NotificationBell` component in dashboard header (desktop+mobile) — toggles for sound/desktop, "Tes Suara" button, permission request flow
-✓ Persistent settings via localStorage (`swm_notif_sound`, `swm_notif_desktop`)
-✓ Wired into Kasir Orders, Kasir Dashboard, Admin Orders pages on SSE `order_created` event
-✓ **Per-status chimes** — distinct WebAudio melody for each transition:
-  - Pesanan Baru: urgent double-bell (6 oscillators)
-  - Pembayaran Diterima: 2-note rising (cash-register)
-  - Diproses: soft single low beep (700 Hz)
-  - Dimasak: soft single mid beep (800 Hz)
-  - **Siap Diantar**: loud 4-note doorbell repeated 2x (server-call alarm, 8 oscillators)
-  - Selesai: 3-note ascending success
-✓ `notifyReadyForDelivery()` on Kasir & Admin Orders — fires only on transition (deduplicated)
-✓ `notifyCustomerStatus()` on Tracking page — desktop notif when tab hidden, in-tab chime when visible
-✓ NotificationBell popover has "Preview per Status" section to familiarize staff with sounds
+✓ WebAudio chime + Browser Notification API + Persistent settings
+✓ `NotificationBell` component in dashboard header (desktop+mobile) — toggles for sound/desktop/push, "Tes Suara" button, permission request flow
+✓ Per-status chimes (6 distinct melodies) — `playStatusChime(status)` dispatcher
+✓ `notifyReadyForDelivery()` on Kasir & Admin Orders, `notifyCustomerStatus()` on Tracking
+✓ **Web Push notifications (VAPID + Service Worker)** — notif sampai walau tab/browser tertutup
+  - Backend: pywebpush + VAPID keys auto-generated → endpoints `/api/push/vapid-public-key`, `/api/push/subscribe`, `/api/push/unsubscribe`, `/api/push/test`
+  - Auto-cleanup expired subscriptions on 404/410
+  - `notify()` SSE broadcasts also fire push: order_created → staff; status changes → customer; siap_diantar → BOTH staff & customer
+  - Frontend: `/service-worker.js` (push + notificationclick handlers, auto-focus existing tab), `lib/push.js` (subscribePush/unsubscribePush/sendTestPush), SW auto-registered on app mount
+  - NotificationBell: "Push (Browser Tertutup)" toggle + "Tes Push" button
+  - Customer Tracking: dedicated subscribe card "Aktifkan notifikasi pesanan" linked to specific order_id
 
 ## Tested
 - Backend pytest: 30/30 passing (auth, CRUD, orders, payments, reports, exports)
