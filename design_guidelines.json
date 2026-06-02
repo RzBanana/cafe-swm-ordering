@@ -1,0 +1,137 @@
+{
+  "project_name": "SWM Cafe Web Ordering System",
+  "theme": "LIGHT",
+  "archetype": "1 (Organic & Earthy)",
+  "emotional_tone": "Warm, welcoming, tactile, and appetizing. It should feel like stepping into a cozy neighborhood cafe. Avoid clinical or purely 'tech-startup' vibes.",
+  "typography": {
+    "fonts": {
+      "heading": "Cormorant Garamond",
+      "body": "Outfit",
+      "import_url": "@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=Outfit:wght@300;400;500;600&display=swap');"
+    },
+    "hierarchy": {
+      "h1": "text-4xl sm:text-5xl lg:text-6xl font-heading tracking-tight text-primary",
+      "h2": "text-2xl sm:text-3xl lg:text-4xl font-heading tracking-tight text-primary",
+      "h3": "text-xl sm:text-2xl font-heading text-primary/90",
+      "body_large": "text-lg font-body text-foreground/80 leading-relaxed",
+      "body": "text-base font-body text-foreground/70 leading-relaxed",
+      "small_label": "text-xs font-body tracking-[0.1em] uppercase text-muted-foreground font-semibold"
+    },
+    "rules": [
+      "Do NOT use Inter, Roboto, or generic fonts for headings.",
+      "Headings must use Cormorant Garamond for elegance and warmth.",
+      "Body text must use Outfit for clarity and clean UI.",
+      "Apply tight letter spacing to headings (tracking-tight)."
+    ]
+  },
+  "color_palette": {
+    "css_variables": {
+      ":root": {
+        "--background": "38 28% 97%",
+        "--foreground": "20 14% 15%",
+        "--card": "38 28% 97%",
+        "--card-foreground": "20 14% 15%",
+        "--popover": "38 28% 97%",
+        "--popover-foreground": "20 14% 15%",
+        "--primary": "14 53% 49%",
+        "--primary-foreground": "38 28% 97%",
+        "--secondary": "34 25% 85%",
+        "--secondary-foreground": "20 14% 15%",
+        "--muted": "34 25% 85%",
+        "--muted-foreground": "20 10% 40%",
+        "--accent": "24 35% 80%",
+        "--accent-foreground": "20 14% 15%",
+        "--destructive": "0 84% 60%",
+        "--destructive-foreground": "38 28% 97%",
+        "--border": "34 25% 85%",
+        "--input": "34 25% 85%",
+        "--ring": "14 53% 49%",
+        "--radius": "0.5rem"
+      },
+      ".dark": {
+        "--background": "20 14% 15%",
+        "--foreground": "38 28% 97%",
+        "--card": "20 14% 15%",
+        "--card-foreground": "38 28% 97%",
+        "--popover": "20 14% 15%",
+        "--popover-foreground": "38 28% 97%",
+        "--primary": "14 53% 49%",
+        "--primary-foreground": "38 28% 97%",
+        "--secondary": "24 15% 25%",
+        "--secondary-foreground": "38 28% 97%",
+        "--muted": "24 15% 25%",
+        "--muted-foreground": "34 25% 75%",
+        "--accent": "14 25% 30%",
+        "--accent-foreground": "38 28% 97%",
+        "--destructive": "0 62% 30%",
+        "--destructive-foreground": "38 28% 97%",
+        "--border": "24 15% 25%",
+        "--input": "24 15% 25%",
+        "--ring": "14 53% 49%"
+      }
+    },
+    "description": "Base is warm cream/bone white. Primary is Deep Terracotta (approx #C05A3B) for CTAs. Text is rich Espresso (#2C1A14). Borders are warm sand."
+  },
+  "layout_spacing": {
+    "philosophy": "Generous spacing. Allow food images to breathe.",
+    "container_padding": "p-6 md:p-8 lg:p-12",
+    "customer_app": {
+      "strategy": "Mobile-first, bottom-heavy interaction. Cardless flow where images span edge-to-edge with generous bottom padding for action bars.",
+      "hero_image": "max-h-[35vh] w-full object-cover rounded-b-[2rem]"
+    },
+    "dashboards": {
+      "strategy": "The 'Control Room' grid but with warm aesthetics. High density but with 16px to 24px padding within cards.",
+      "grid": "grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6"
+    }
+  },
+  "component_guidelines": {
+    "buttons": "Shadcn buttons but apply rounded-md, not full pill. Avoid 100% border-radius. Add subtle warm box-shadow on primary buttons.",
+    "cards": "Subtle Neumorphism. Use light top-left highlight and soft ambient shadow, plus a 1px border-border/40 to ground it.",
+    "inputs": "Shadcn defaults but ensure focus rings are in var(--primary). Background slightly off-white compared to main background.",
+    "glassmorphism": "For sticky bottom cart bars or sticky header, use backdrop-blur-xl bg-background/80 with a 1px border-t border-border/40.",
+    "icons": "Use @phosphor-icons/react (Duotone or Regular weight). They feel more premium for cafes than Lucide."
+  },
+  "page_blueprints": {
+    "customer_flow": [
+      { "page": "Scan & Welcome", "layout": "Large hero image of cafe. H1 greeting. 'Mulai Pesan' CTA." },
+      { "page": "Menu Browse", "layout": "Sticky category filter (pill tags). 2-column grid for products on mobile. Large appetizing photos, clean typography for price." },
+      { "page": "Product Detail Bottom Sheet", "layout": "Drawer slides up. Full width photo. Qty +/-, Catatan input. Sticky bottom CTA 'Tambah ke Keranjang'." },
+      { "page": "Cart & Checkout", "layout": "List view of items. Payment method selector (Tunai, QRIS, M-Banking). Sticky total and 'Bayar' button." },
+      { "page": "Tracking & Receipt", "layout": "Vertical timeline for order status (Menunggu, Diproses, Dimasak, Siap, Selesai). Mock QRIS display area." }
+    ],
+    "cashier_dashboard": [
+      { "page": "Cashier Main", "layout": "Sidebar nav. Top: 4 Bento stat cards. Main: Split view (Left: Order List, Right: Order Detail & Payment Confirmation Modal)." },
+      { "page": "Actions", "layout": "Modal for Tunai with 'Uang Diterima' input and 'Kembalian' auto-calculate. Input for estimating wait time." }
+    ],
+    "admin_dashboard": [
+      { "page": "Overview", "layout": "Recharts Area chart for income. Recent activity feed." },
+      { "page": "CRUD Tables", "layout": "Shadcn Data Tables. Upload image UI for products. QR Code generator display for tables." }
+    ]
+  },
+  "media": {
+    "instructions": "MUST use these exact URLs. Main agent depends on these.",
+    "hero_and_cafe_interior": [
+      { "url": "https://images.pexels.com/photos/9409791/pexels-photo-9409791.jpeg", "description": "Warm rustic cafe interior with window light. Use for customer app hero or login screen." },
+      { "url": "https://images.pexels.com/photos/20825644/pexels-photo-20825644.jpeg", "description": "Charming cafe interior with rustic decor. Use as fallback hero." }
+    ],
+    "products_food_drinks": [
+      { "url": "https://images.pexels.com/photos/35229818/pexels-photo-35229818.jpeg", "description": "Iced coffee latte. Use for beverage menu items." },
+      { "url": "https://images.pexels.com/photos/27374392/pexels-photo-27374392.jpeg", "description": "Croissants with tea. Use for snack/pastry menu items." },
+      { "url": "https://images.pexels.com/photos/34800842/pexels-photo-34800842.jpeg", "description": "Croissants with black coffee. Use for combo meals or featured products." },
+      { "url": "https://images.unsplash.com/photo-1592663527359-cf6642f54cff", "description": "Iced cream in clear glass. Use for dessert/drinks." }
+    ]
+  },
+  "testing_requirements": {
+    "data_testid_rules": "All interactive and key informational elements MUST include a data-testid attribute.",
+    "format": "kebab-case, role-based. Examples: 'login-submit-button', 'menu-item-card', 'cart-checkout-button', 'payment-qris-option', 'admin-sidebar-nav'."
+  },
+  "agent_instructions": [
+    "1. Setup Tailwind with the exact CSS variables and fonts provided above.",
+    "2. Build the Customer App as a Mobile-First PWA-style web app. Use max-w-md mx-auto for the main container to simulate a mobile app on desktop.",
+    "3. Dashboards (Admin/Cashier) should be full-width desktop layouts with a sidebar.",
+    "4. Use @phosphor-icons/react for icons.",
+    "5. Use Recharts for the admin dashboard income charts.",
+    "6. Ensure the mock QRIS flow displays a fake QR code and moves order status appropriately.",
+    "7. DO NOT USE ANY PLACEHOLDER IMAGE URLS. Use only the URLs from the media section."
+  ]
+}
