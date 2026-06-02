@@ -42,6 +42,16 @@ Membangun sistem informasi pemesanan Cafe SWM berbasis web dengan 3 pengguna uta
 ✓ `NotificationBell` component in dashboard header (desktop+mobile) — toggles for sound/desktop, "Tes Suara" button, permission request flow
 ✓ Persistent settings via localStorage (`swm_notif_sound`, `swm_notif_desktop`)
 ✓ Wired into Kasir Orders, Kasir Dashboard, Admin Orders pages on SSE `order_created` event
+✓ **Per-status chimes** — distinct WebAudio melody for each transition:
+  - Pesanan Baru: urgent double-bell (6 oscillators)
+  - Pembayaran Diterima: 2-note rising (cash-register)
+  - Diproses: soft single low beep (700 Hz)
+  - Dimasak: soft single mid beep (800 Hz)
+  - **Siap Diantar**: loud 4-note doorbell repeated 2x (server-call alarm, 8 oscillators)
+  - Selesai: 3-note ascending success
+✓ `notifyReadyForDelivery()` on Kasir & Admin Orders — fires only on transition (deduplicated)
+✓ `notifyCustomerStatus()` on Tracking page — desktop notif when tab hidden, in-tab chime when visible
+✓ NotificationBell popover has "Preview per Status" section to familiarize staff with sounds
 
 ## Tested
 - Backend pytest: 30/30 passing (auth, CRUD, orders, payments, reports, exports)
