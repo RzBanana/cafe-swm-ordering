@@ -22,13 +22,19 @@ Membangun sistem informasi pemesanan Cafe SWM berbasis web dengan 3 pengguna uta
 
 ## Implemented (2026-02)
 ### Customer (17 features)
-✓ Scan/select table (QR `?meja=NN` auto-detect) ✓ Browse menu (3 cats, 9 products, search, filter) ✓ Product detail drawer with qty +/- and notes ✓ Cart with qty/note edit/remove ✓ Sold-out badge & block ✓ Checkout with subtotal/pajak 10%/total ✓ 3 payment methods (Tunai/QRIS-mock/Transfer) ✓ Mock QR display + confirm ✓ Cash "menunggu konfirmasi kasir" state ✓ Transfer instructions ✓ Order tracking with 6-stage timeline ✓ Estimasi waktu display ✓ Digital receipt (printable) ✓ Order history (localStorage-backed)
+✓ Scan/select table (QR `?meja=NN` auto-detect) ✓ Browse menu (3 cats, 9 products, search, filter) ✓ Product detail drawer with qty +/- and notes ✓ Cart with qty/note edit/remove ✓ Sold-out badge & block ✓ Checkout with subtotal/pajak 10%/total ✓ 3 payment methods (Tunai/QRIS-mock/Transfer) ✓ Mock QR display + confirm ✓ Cash "menunggu konfirmasi kasir" state ✓ Transfer instructions ✓ Order tracking with 6-stage timeline ✓ Estimasi waktu display ✓ Digital receipt (printable) ✓ Order history (localStorage-backed) ✓ **Real-time SSE updates** on tracking page (no refresh)
 
 ### Kasir (10 features)
-✓ Login (JWT) ✓ Dashboard with KPIs (new/processing/done/revenue) ✓ Today's orders list ✓ Order detail panel ✓ Cash payment dialog with auto change calculator ✓ Estimasi quick-buttons (10/15/20/30 menit) ✓ Status update dropdown (6 statuses) ✓ Cetak struk (new tab to /track) ✓ Riwayat per tanggal with summary ✓ Profile & password
+✓ Login (JWT) ✓ Dashboard with KPIs ✓ Today's orders list ✓ Order detail panel ✓ Cash payment dialog with auto change calculator ✓ Estimasi quick-buttons ✓ Status update dropdown ✓ **Cetak struk thermal (80mm) + ESC/POS .bin download** ✓ Riwayat per tanggal ✓ Profile & password ✓ **Live new-order toast notifications** via SSE
 
 ### Admin (16 features)
-✓ Login ✓ Dashboard (5 KPIs + 14-day area chart + mini stats) ✓ CRUD Products (with image upload as base64 or URL, sold-out toggle switch) ✓ CRUD Categories (with emoji icon) ✓ CRUD Tables + QR generator (download PNG) ✓ CRUD Employees (admin/kasir roles, reset password) ✓ Orders management (filter by status, view detail, update status, cancel) ✓ Reports (4 tabs: Daily/Monthly/Yearly/By Payment Method) ✓ Charts with Recharts (Area for dashboard, Bar for reports, Pie for methods) ✓ Excel export for daily/monthly/yearly ✓ Profile + photo upload + change password
+✓ Login ✓ Dashboard (5 KPIs + 14-day area chart) ✓ CRUD Products (image upload, sold-out toggle) ✓ CRUD Categories ✓ CRUD Tables + QR generator ✓ CRUD Employees ✓ Orders management (filter, view, update status, cancel) ✓ Reports (Daily/Monthly/Yearly/By Method) ✓ Charts (Recharts) ✓ Excel export ✓ Profile + photo + change password ✓ **Live order list updates** via SSE
+
+### Real-time & Printing (added 2026-02)
+✓ Server-Sent Events (SSE) — `/api/events/staff` (all order events) and `/api/events/order/{id}` (per-order) — works through K8s ingress
+✓ Native EventSource hook (`useEventStream`) with auto-reconnect
+✓ Thermal print page `/print/:orderId` — 80mm monospace layout, auto window.print()
+✓ ESC/POS endpoint `GET /api/orders/{id}/escpos` — raw bytes for direct USB/Bluetooth thermal printers (RawBT, lp, etc.)
 
 ## Tested
 - Backend pytest: 30/30 passing (auth, CRUD, orders, payments, reports, exports)

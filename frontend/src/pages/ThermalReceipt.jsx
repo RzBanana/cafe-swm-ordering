@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useParams } from "react-router-dom";
 import api, { formatRupiah, API_BASE } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -17,8 +17,11 @@ export default function ThermalReceipt() {
     api.get(`/orders/${orderId}`).then((r) => setOrder(r.data));
   }, [orderId]);
 
+  const printedRef = useRef(false);
+
   useEffect(() => {
-    if (order) {
+    if (order && !printedRef.current) {
+      printedRef.current = true;
       const t = setTimeout(() => window.print(), 600);
       return () => clearTimeout(t);
     }
